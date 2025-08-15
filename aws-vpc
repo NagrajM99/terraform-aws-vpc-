@@ -1,0 +1,128 @@
+1. provider.tf
+provider "aws" {
+    region = "us-east-1"
+}
+
+2. vpc.tf
+resource "aws_vpc" "myvpc" {
+    tags = {
+        Name = "clarivate-vpc"
+    }
+    cidr_block = "10.0.0.0/16"
+    instance_tenancy = "default"
+    enable_dns_hostnames = true
+}
+
+3. subnets.tf
+resource "aws_subnet" "public_subnet" {
+    vpc_id = aws_vpc.myvpc.id
+    tags = {
+         Name = "clarivate-public-sn"
+    }
+    availability_zone = "us-east-1a"
+    cidr_block = "10.0.0.0/24"
+    map_public_ip_on_launch = true
+}
+
+resource "aws_subnet" "private_subnet" {
+    vpc_id = aws_vpc.myvpc.id
+    tags = {
+         Name = "clarivate-private-sn"
+    }
+    availability_zone = "us-east-1a"
+    cidr_block = "10.0.1.0/24"
+}
+
+4. IGW.tf
+resource "aws_internet_gateway" "myigw" {
+    tags = {
+        Name = "clarivate-igw"
+    }
+    vpc_id = aws_vpc.myvpc.id
+}
+
+5. public-rt.tf
+resource "aws_route_table" "public_rt" {
+    tags = {
+        Name = "clarivate-public-rt"
+    }
+    vpc_id = aws_vpc.myvpc.id
+    route {
+        cidr_block = "0.0.0.0/0"
+        gateway_id = aws_internet_gateway.myigw.id
+    }
+}
+
+6. NAT-GW.tf
+resource "aws_eip" "myeip" {
+    domain = "vpc"
+}
+resource "aws_nat_gateway" "mynat" {
+    tags = {
+        Name = "clarivate-nat-gw" 
+        }
+        subnet_id = aws_subnet.public_subnet.id
+        allocation_id = aws_eip.myeip.id
+    }
+
+7. private-rt.tf
+resource "aws_route_table" "private_rt" {
+    tags = {
+        Name = "clarivate-private-rt"
+    }
+    vpc_id = aws_vpc.myvpc.id
+    route {
+        cidr_block = "0.0.0.0/0"
+        nat_gateway_id = aws_nat_gateway.mynat.id
+    }
+}
+
+8. subnet-association.tf
+resource "aws_route_table_association" "public_association" {
+    subnet_id = aws_subnet.public_subnet.id
+    route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_route_table_association" "private_association" {
+    subnet_id = aws_subnet.private_subnet.id
+    route_table_id = aws_route_table.private_rt.id
+}
+
+9. security-groups.tf
+resource "aws_security_group" "public-sg" {
+    name = "clarivate-public-sg"
+    description = "this is for public-sn"
+    vpc_id = aws_vpc.myvpc.id
+
+    ingress {
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+    egress {
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+}
+
+resource "aws_security_group" "private-sg" {
+    name = "clarivate-private-sg"
+    description = "this is for private-sn"
+    vpc_id = aws_vpc.myvpc.id
+
+    ingress {
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+    egress {
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+}
